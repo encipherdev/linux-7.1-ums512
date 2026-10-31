@@ -1,0 +1,912 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Anbernic RG Rotate (Unisoc UMS512 / T618, sharkl5pro) board DTS.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/input/gpio-keys.h>
+#include <dt-bindings/clock/sprd,ums512-clk.h>
+#include <dt-bindings/mfd/sprd,sc2730-regs.h>
+#include <dt-bindings/mfd/sprd,sc2730-mask.h>
+#include "ums512.dtsi"
+#include "sc2730.dtsi"
+#include "sprd-sound-fe-be.dtsi"
+
+/ {
+	model = "Anbernic RG Rotate";
+	compatible = "sprd,ums512-1h10", "sprd,ums512";
+	sprd,sc-id = "ums512 1h10 1000";
+
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0xC0000000>;
+	};
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		stdout-path = "serial1:115200n8";
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/*
+		 * ddrbist + sysdumpinfo: the first two pages of DRAM. u-boot
+		 * and the sysdump machinery stamp magic values here across
+		 * reboots (see SPRD_SYSDUMP_MAGIC notes).
+		 */
+		ddrbist-mem@80000000 {
+			reg = <0 0x80000000 0 0x1000>;
+			no-map;
+		};
+
+		sysdumpinfo-mem@80001000 {
+			reg = <0 0x80001000 0 0x1000>;
+			no-map;
+		};
+
+		/* Modem CP image + CP/AP SIPC shared memory. The CP is not
+		 * started under mainline, but stock reserves both and the
+		 * boot chain may still touch them - keep them out of the
+		 * allocator. */
+		cp-mem@89600000 {
+			reg = <0 0x89600000 0 0x4900000>;
+			no-map;
+		};
+
+		sipc-mem@8e000000 {
+			reg = <0 0x8e000000 0 0x900000>;
+			no-map;
+		};
+
+		/* Stock base DT reserves this 64MB IQ/calibration buffer but
+		 * frees it at runtime outside calibration mode, so it is
+		 * missing from the live-booted reference tree. Reserved here
+		 * while hunting corruption; candidate to reclaim later. */
+		iq-mem@90000000 {
+			reg = <0 0x90000000 0 0x4000000>;
+			no-map;
+		};
+
+		sml-mem@94000000 {
+			reg = <0 0x94000000 0 0x40000>;
+			no-map;
+		};
+
+		tos-mem@94040000 {
+			reg = <0 0x94040000 0 0x5fc0000>;
+			no-map;
+		};
+
+		sh-mem@9a000000 {
+			reg = <0 0x9a000000 0 0x100000>;
+			no-map;
+		};
+
+		/* u-boot console log capture (read back via pstore/ramoops
+		 * tooling); u-boot writes here unconditionally. */
+		uboot-log@9de80000 {
+			reg = <0 0x9de80000 0 0x80000>;
+			no-map;
+		};
+
+        framebuffer_region: framebuffer-region@9e000000 {
+            compatible = "framebuffer";
+            reg = <0 0x9e000000 0 (720 * 720 * 4)>;
+            iommu-addresses = <&dpu 0x9e000000 (720 * 720 * 4)>;
+            no-map;
+        };
+
+		/* Remainder of stock's logobuffer@9e000000 (0x9e4000 total);
+		 * the framebuffer node above only covers the panel-sized
+		 * slice u-boot actually scans out. */
+		logobuffer-tail@9e1fa400 {
+			reg = <0 0x9e1fa400 0 0x7e9c00>;
+			no-map;
+		};
+
+		/* Stock base DT reserves 16MB here for u-boot sysdump; the
+		 * live tree shows it zero-sized because u-boot rewrites the
+		 * node, but the region may still be stamped by the boot
+		 * chain. Reserved while hunting corruption. */
+		sysdump-uboot@9f000000 {
+			reg = <0 0x9f000000 0 0x1000000>;
+			no-map;
+		};
+
+		/*
+		 * Secure/DRM pool. Stock declares this in a devicetree overlay
+		 * (fragment@12) rather than the base dts, so it is easy to miss
+		 * when porting: see docs/decomp_overlay.dts.
+		 *
+		 * The secure world writes this region whether or not the kernel
+		 * knows about it. Leaving it unreserved lets the page allocator
+		 * hand it to userspace, and the pages are then zeroed underneath
+		 * their owner -- which looks exactly like memory corruption once
+		 * an allocation grows past ~1.5G and starts reaching 0xe3800000.
+		 */
+		widevine-mem@e3800000 {
+			reg = <0 0xe3800000 0 0xc800000>;
+			no-map;
+		};
+
+		/* Camera faceid + vDSP firmware regions. High DRAM - if left
+		 * unreserved these are exactly where big allocations (page
+		 * cache on large files) start landing and getting corrupted. */
+		faceid-mem@fd270000 {
+			reg = <0 0xfd270000 0 0x500000>;
+			no-map;
+		};
+
+		vdsp-mem@fd770000 {
+			reg = <0 0xfd770000 0 0x2800000>;
+			no-map;
+		};
+
+		rebootescrow@fff70000 {
+			reg = <0 0xfff70000 0 0x10000>;
+			no-map;
+		};
+
+		/* Persistent kernel console/oops log, same layout as stock so
+		 * u-boot's uboot_log dumper keeps working. No no-map: ramoops
+		 * needs to map it. */
+		ramoops@fff80000 {
+			compatible = "ramoops";
+			reg = <0 0xfff80000 0 0x40000>;
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			pmsg-size = <0x8000>;
+		};
+
+		linux,cma {
+			compatible = "shared-dma-pool";
+			size = <0x0 0x8000000>;
+			reusable;
+			linux,cma-default;
+		};
+	};
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 2 40000>;
+		max-brightness = <4095>;
+		default-brightness-level = <2650>;
+	};
+
+	lcd_avdd: regulator-lcd-avdd {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-avdd";
+		gpio = <&ap_gpio 15 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+	};
+
+	lcd_avee: regulator-lcd-avee {
+		compatible = "regulator-fixed";
+		regulator-name = "lcd-avee";
+		gpio = <&ap_gpio 138 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+	};
+
+	touch_vdd: regulator-touch-vdd {
+		compatible = "regulator-fixed";
+		regulator-name = "touch-vdd";
+		gpio = <&ap_gpio 16 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		regulator-boot-on;
+	};
+
+	gamepad_keys: gpio-keys-gamepad {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&joypad_pins_func &joypad_pins_misc>;
+
+		btn-dpad-up {
+			label = "DPAD-UP";
+			linux,code = <BTN_DPAD_UP>;
+			gpios = <&ap_gpio 26 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-dpad-down {
+			label = "DPAD-DOWN";
+			linux,code = <BTN_DPAD_DOWN>;
+			gpios = <&ap_gpio 25 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-dpad-left {
+			label = "DPAD-LEFT";
+			linux,code = <BTN_DPAD_LEFT>;
+			gpios = <&ap_gpio 97 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-dpad-right {
+			label = "DPAD-RIGHT";
+			linux,code = <BTN_DPAD_RIGHT>;
+			gpios = <&ap_gpio 86 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-a {
+			label = "BTN-A";
+			linux,code = <BTN_SOUTH>;
+			gpios = <&ap_gpio 116 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-b {
+			label = "BTN-B";
+			linux,code = <BTN_EAST>;
+			gpios = <&ap_gpio 112 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-x {
+			label = "BTN-X";
+			linux,code = <BTN_NORTH>;
+			gpios = <&ap_gpio 88 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-y {
+			label = "BTN-Y";
+			linux,code = <BTN_WEST>;
+			gpios = <&ap_gpio 113 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-tl {
+			label = "BTN-TL";
+			linux,code = <BTN_TL>;
+			gpios = <&ap_gpio 14 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-tr {
+			label = "BTN-TR";
+			linux,code = <BTN_TR>;
+			gpios = <&ap_gpio 1 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-tl2 {
+			label = "BTN-TL2";
+			linux,code = <BTN_TL2>;
+			gpios = <&ap_gpio 3 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-tr2 {
+			label = "BTN-TR2";
+			linux,code = <BTN_TR2>;
+			gpios = <&ap_gpio 2 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-select {
+			label = "BTN-SELECT";
+			linux,code = <BTN_SELECT>;
+			gpios = <&ap_gpio 55 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-start {
+			label = "BTN-START";
+			linux,code = <BTN_START>;
+			gpios = <&ap_gpio 87 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-mode {
+			label = "BTN-MODE";
+			linux,code = <BTN_MODE>;
+			gpios = <&ap_gpio 124 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		btn-thumbr {
+			label = "BTN-THUMBR";
+			linux,code = <BTN_THUMBR>;
+			gpios = <&ap_gpio 126 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+	};
+
+	sys_keys: gpio-keys-system {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&hall_pin_func &hall_pin_misc &volup_pin_func &volup_pin_misc>;
+
+		sw-hall {
+			label = "Hall Swivel";
+			linux,input-type = <EV_SW>;
+			linux,code = <SW_LID>;
+			gpios = <&ap_gpio 54 GPIO_ACTIVE_LOW>;
+			debounce-interval = <10>;
+			wakeup-source;
+			/*
+			 * Wake on open only. The gpio is active-low and
+			 * asserted means closed, so DEASSERTED is the
+			 * opening edge; gpio-keys retypes the irq to that
+			 * single edge for the duration of suspend. Without
+			 * this the trigger stays EDGE_BOTH and closing the
+			 * swivel wakes a device that was put to sleep with
+			 * the power key.
+			 */
+			wakeup-event-action = <EV_ACT_DEASSERTED>;
+		};
+		key-volumedown {
+			label = "Volume Down Key";
+			linux,code = <KEY_VOLUMEDOWN>;
+			gpios = <&pmic_eic 4 GPIO_ACTIVE_HIGH>;
+			debounce-interval = <2>;
+		};
+		key-volumeup {
+			label = "Volume Up Key";
+			linux,code = <KEY_VOLUMEUP>;
+			gpios = <&ap_gpio 30 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+		};
+		key-power {
+			label = "Power Key";
+			linux,code = <KEY_POWER>;
+			gpios = <&pmic_eic 1 GPIO_ACTIVE_LOW>;
+			debounce-interval = <2>;
+			wakeup-source;
+		};
+	};
+
+	bat: battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <1900000>;
+		charge-term-current-microamp = <120000>;
+		constant-charge-voltage-max-microvolt = <4340000>;
+		factory-internal-resistance-micro-ohms = <230000>;
+		voltage-min-design-microvolt = <3410000>;
+		operating-range-celsius = <0 60>;
+		ocv-capacity-celsius = <25>;
+		ocv-capacity-table-0 = <4338000 100>, <4243000 95>,
+			<4189000 90>, <4143000 85>, <4102000 80>,
+			<4051000 75>, <4002000 70>, <3958000 65>,
+			<3901000 60>, <3840000 55>, <3784000 50>,
+			<3742000 45>, <3703000 40>, <3673000 35>,
+			<3656000 30>, <3622000 25>, <3595000 20>,
+			<3558000 15>, <3523000 10>, <3490000 5>,
+			<3412000 0>;
+
+		resistance-temp-table = <45 98>, <25 97>, <10 97>,
+			<0 97>, <(-10) 98>, <(-20) 98>;
+
+		voltage-temp-table = <1095000 (-200)>, <986000 (-150)>,
+			<878000 (-100)>, <775000 (-50)>, <678000 0>,
+			<590000 50>, <510000 100>, <440000 150>,
+			<378000 200>, <324000 250>, <278000 300>,
+			<238000 350>, <204000 400>, <175000 450>,
+			<150000 500>, <129000 550>, <111000 600>,
+			<96000 650>;
+	};
+
+
+};
+
+&led1 {
+	linux,default-trigger = "default-on";
+};
+
+&led2 {
+	label = "yellow";
+};
+
+&sc2730_fgu {
+	status = "okay";
+	monitored-battery = <&bat>;
+	power-supplies = <&charger>;
+	sprd,calib-resistance-micro-ohms = <10000>;
+};
+
+&sc2730_codec {
+	status = "okay";
+	sprd,syscon-pmu-apb = <&pmu_apb_regs>;
+	hp-use-inter-pa = <1>;
+	fixed-sample-rate = <48000 48000 48000>;
+	digital-codec = <&sprd_audio_codec_dig>;
+};
+
+&audcp_boot {
+	status = "okay";
+};
+
+&sound_vbc_v4_sprd_codec {
+	status = "okay";
+	sprd-audio-card,routing =
+		"Ext Spk", "HP Pin",
+		"Ext Spk1", "HP Pin";
+	sprd,spk-ext-pa-info = <0 0 4 0>;
+	sprd,spk-ext-pa-gpio = <&ap_gpio 9 1>;
+};
+
+&pinctrl {
+	i2c4_pin_func: i2c4-pin-func {
+		pins = "UMS512_SIMCLK2", "UMS512_SIMDA2";
+		function = "func2";
+	};
+
+	i2c4_pin_misc: i2c4-pin-misc {
+		pins = "UMS512_SIMCLK2_MISC", "UMS512_SIMDA2_MISC";
+		/* 4700 => WPUS|WPU, matching the u-boot pinmap (strong pull for
+		 * the open-drain i2c lines). */
+		bias-pull-up = <4700>;
+	};
+
+    sd0_cd: sd0-cd {
+        pins = "UMS512_RFFE1_SDA";
+        function = "func4";
+    };
+
+	/*
+	 * SDA3/SCL3 carry the TOP-DVFS engine's autonomous I2C channel to
+	 * the FAN53555 (DCDC_CPU1). Live stock Android has these pads at
+	 * func-sel 0 ("func1"), the same value as every other real I2C pad
+	 * (SCL0/SDA0, SCL1/SDA1, SCL6/SDA6) - see
+	 * docs/dvfs-working-regmaps/stock_pinconf_pins.txt. The earlier
+	 * func4 setting here (a misread of the stock DT overlay) routed the
+	 * pads AWAY from the I2C function, so the engine's FAN53555
+	 * transaction never reached the wire and DCDC_CPU1 parked at
+	 * STATE_I2C=4. Applied via cpudvfs_dev probe.
+	 */
+	dvfs_i2c_pin_func: dvfs-i2c-pin-func {
+		pins = "UMS512_SDA3", "UMS512_SCL3";
+		function = "func1";
+	};
+
+	joypad_pins_func: joypad-pins-func {
+		pins = "UMS512_RFSDA0", "UMS512_RFSCK0", "UMS512_RFSEN0",
+		       "UMS512_RFSEN1", "UMS512_RFCTL6", "UMS512_RFCTL7",
+		       "UMS512_IIS3DO", "UMS512_KEYIN1", "UMS512_KEYIN2";
+		function = "func4";
+	};
+
+	joypad_pins_misc: joypad-pins-misc {
+		pins = "UMS512_RFSDA0_MISC", "UMS512_RFSCK0_MISC",
+		       "UMS512_RFSEN0_MISC", "UMS512_RFSEN1_MISC",
+		       "UMS512_RFCTL6_MISC", "UMS512_RFCTL7_MISC",
+		       "UMS512_IIS3DO_MISC", "UMS512_KEYIN1_MISC",
+		       "UMS512_KEYIN2_MISC";
+		input-enable;
+		bias-pull-up = <20000>;
+	};
+
+	volup_pin_func: volup-pin-func {
+		pins = "UMS512_RFCTL11";
+		function = "func4";
+	};
+
+	volup_pin_misc: volup-pin-misc {
+		pins = "UMS512_RFCTL11_MISC";
+		input-enable;
+		bias-pull-up = <20000>;
+	};
+
+	hall_pin_func: hall-pin-func {
+		pins = "UMS512_SPI2_DI";
+		function = "func4";
+	};
+
+	hall_pin_misc: hall-pin-misc {
+		pins = "UMS512_SPI2_DI_MISC";
+		input-enable;
+		bias-pull-up = <20000>;
+	};
+};
+
+&cpudvfs_dev {
+	pinctrl-names = "default";
+	pinctrl-0 = <&dvfs_i2c_pin_func>;
+};
+
+&iommu_disp {
+	status = "okay";
+};
+
+&disp {
+	status = "okay";
+};
+
+&dpu {
+	status = "okay";
+	memory-region = <&framebuffer_region>;
+	reset-syscon = <&ap_ahb_regs 0x04 0x02>;
+};
+
+&pwm {
+	status = "okay";
+};
+
+&dsi {
+	status = "okay";
+	reset-syscon = <&ap_ahb_regs 0x04 0x01>;
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel@0 {
+		compatible = "rocknix,generic-dsi";
+		reg = <0>;
+		reset-gpios = <&ap_gpio 50 GPIO_ACTIVE_LOW>;
+		backlight = <&backlight>;
+		vdd-supply = <&lcd_avdd>;
+		iovcc-supply = <&lcd_avee>;
+
+		panel_description =
+			"G lanes=2 format=rgb888 size=109,62 flags=3 hs_rate=551488000 lp_rate=20000000 delays=5,50,120,100,50",
+			"M clock=38400 horizontal=720,46,2,52 vertical=720,30,2,25 default=1",
+			"I dcs=ff data=30",
+			"I dcs=ff data=52",
+			"I dcs=ff data=01",
+			"I dcs=e3 data=00",
+			"I dcs=25 data=0a",
+			"I dcs=28 data=5f",
+			"I dcs=29 data=c2",
+			"I dcs=2a data=cf",
+			"I dcs=30 data=58",
+			"I dcs=37 data=9c",
+			"I dcs=38 data=a7",
+			"I dcs=39 data=1f",
+			"I dcs=44 data=00",
+			"I dcs=49 data=3c",
+			"I dcs=59 data=fe",
+			"I dcs=5c data=00",
+			"I dcs=80 data=20",
+			"I dcs=91 data=77",
+			"I dcs=92 data=77",
+			"I dcs=a0 data=55",
+			"I dcs=a1 data=50",
+			"I dcs=a3 data=58",
+			"I dcs=a4 data=9c",
+			"I dcs=a7 data=02",
+			"I dcs=a8 data=01",
+			"I dcs=a9 data=01",
+			"I dcs=aa data=fc",
+			"I dcs=ab data=28",
+			"I dcs=ac data=06",
+			"I dcs=ad data=06",
+			"I dcs=ae data=06",
+			"I dcs=af data=03",
+			"I dcs=b0 data=08",
+			"I dcs=b1 data=26",
+			"I dcs=b2 data=28",
+			"I dcs=b3 data=28",
+			"I dcs=b4 data=03",
+			"I dcs=b5 data=08",
+			"I dcs=b6 data=26",
+			"I dcs=b7 data=08",
+			"I dcs=b8 data=26",
+			"I dcs=c0 data=00",
+			"I dcs=c1 data=00",
+			"I dcs=c2 data=00",
+			"I dcs=c3 data=0f",
+			"I dcs=ff data=30",
+			"I dcs=ff data=52",
+			"I dcs=ff data=02",
+			"I dcs=b0 data=00",
+			"I dcs=b1 data=0f",
+			"I dcs=b2 data=12",
+			"I dcs=b3 data=32",
+			"I dcs=b4 data=24",
+			"I dcs=b5 data=3f",
+			"I dcs=b6 data=25",
+			"I dcs=b7 data=3f",
+			"I dcs=b8 data=0e",
+			"I dcs=b9 data=06",
+			"I dcs=ba data=11",
+			"I dcs=bb data=10",
+			"I dcs=bc data=10",
+			"I dcs=bd data=13",
+			"I dcs=be data=1b",
+			"I dcs=bf data=10",
+			"I dcs=c0 data=17",
+			"I dcs=c1 data=08",
+			"I dcs=d0 data=00",
+			"I dcs=d1 data=0d",
+			"I dcs=d2 data=12",
+			"I dcs=d3 data=2a",
+			"I dcs=d4 data=2e",
+			"I dcs=d5 data=3f",
+			"I dcs=d6 data=29",
+			"I dcs=d7 data=43",
+			"I dcs=d8 data=10",
+			"I dcs=d9 data=08",
+			"I dcs=da data=13",
+			"I dcs=db data=10",
+			"I dcs=dc data=12",
+			"I dcs=dd data=13",
+			"I dcs=de data=1f",
+			"I dcs=df data=1a",
+			"I dcs=e0 data=1f",
+			"I dcs=e1 data=0a",
+			"I dcs=ff data=30",
+			"I dcs=ff data=52",
+			"I dcs=ff data=03",
+			"I dcs=04 data=51",
+			"I dcs=05 data=c0",
+			"I dcs=06 data=c0",
+			"I dcs=08 data=86",
+			"I dcs=09 data=87",
+			"I dcs=0a data=84",
+			"I dcs=0b data=85",
+			"I dcs=28 data=33",
+			"I dcs=29 data=33",
+			"I dcs=2a data=eb",
+			"I dcs=2b data=ea",
+			"I dcs=2c data=ed",
+			"I dcs=2d data=ec",
+			"I dcs=34 data=81",
+			"I dcs=35 data=53",
+			"I dcs=37 data=23",
+			"I dcs=40 data=84",
+			"I dcs=41 data=85",
+			"I dcs=42 data=82",
+			"I dcs=43 data=83",
+			"I dcs=44 data=33",
+			"I dcs=45 data=ea",
+			"I dcs=46 data=e9",
+			"I dcs=47 data=33",
+			"I dcs=48 data=ec",
+			"I dcs=49 data=eb",
+			"I dcs=50 data=80",
+			"I dcs=51 data=81",
+			"I dcs=52 data=02",
+			"I dcs=53 data=01",
+			"I dcs=54 data=33",
+			"I dcs=55 data=ee",
+			"I dcs=56 data=ed",
+			"I dcs=57 data=33",
+			"I dcs=58 data=f0",
+			"I dcs=59 data=ef",
+			"I dcs=80 data=00",
+			"I dcs=81 data=01",
+			"I dcs=82 data=06",
+			"I dcs=83 data=07",
+			"I dcs=84 data=04",
+			"I dcs=85 data=05",
+			"I dcs=92 data=03",
+			"I dcs=93 data=02",
+			"I dcs=96 data=00",
+			"I dcs=97 data=01",
+			"I dcs=98 data=06",
+			"I dcs=99 data=07",
+			"I dcs=9a data=04",
+			"I dcs=9b data=05",
+			"I dcs=a8 data=03",
+			"I dcs=a9 data=02",
+			"I dcs=ff data=30",
+			"I dcs=ff data=52",
+			"I dcs=ff data=00",
+			"I dcs=36 data=01",
+			"I dcs=53 data=2c";
+
+		port {
+			panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&dsi_out {
+	remote-endpoint = <&panel_in>;
+};
+
+&hsphy {
+	status = "okay";
+	phy-supply = <&vddusb33>;
+};
+
+&usb {
+	status = "okay";
+	dr_mode = "otg";
+	usb-role-switch;
+	role-switch-default-mode = "peripheral";
+
+	port {
+		usb_hs_ep: endpoint {
+			remote-endpoint = <&tcpc_hs_ep>;
+		};
+	};
+};
+
+&pmic_typec_pd {
+	status = "okay";
+	vbus-supply = <&usb_otg_vbus>;
+
+	connector {
+		compatible = "usb-c-connector";
+		label = "USB-C";
+		power-role = "dual";
+		data-role = "dual";
+		try-power-role = "sink";
+		pd-disable;
+		typec-power-opmode = "default";
+
+		port {
+			tcpc_hs_ep: endpoint {
+				remote-endpoint = <&usb_hs_ep>;
+			};
+		};
+	};
+};
+
+&gpu {
+	mali-supply = <&vddgpu>;
+	status = "okay";
+};
+
+
+
+/*
+ * Stock enables the hw-i2c master at 1MHz (overlay fragment@7 on aon_i2c0).
+ * The big cluster's DVFS voltage path runs through it.
+ */
+&aon_i2c0 {
+	status = "okay";
+	clock-frequency = <1000000>;
+};
+
+&cpudvfs_dev {
+	status = "okay";
+};
+
+&i2c2 {
+	status = "okay";
+	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	speaker_amp: audio-codec@58 {
+		/* Anbernic reused a previously mainlined awinic 87xxx amp */
+		compatible = "anbernic,rgds-amp";
+		reg = <0x58>;
+		sound-name-prefix = "Speaker Amp";
+	};
+};
+
+&i2c3 {
+	status = "okay";
+	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	touchscreen@14 {
+		compatible = "goodix,gt911";
+		reg = <0x14>;
+		AVDD28-supply = <&touch_vdd>;
+		VDDIO-supply = <&touch_vdd>;
+		irq-gpios = <&ap_gpio 144 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&ap_gpio 145 GPIO_ACTIVE_HIGH>;
+		touchscreen-size-x = <720>;
+		touchscreen-size-y = <720>;
+		touchscreen-inverted-x;
+		touchscreen-inverted-y;
+	};
+};
+
+&i2c4 {
+	status = "okay";
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c4_pin_func &i2c4_pin_misc>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	charger: charger@6a {
+		compatible = "awinic,aw32257";
+		reg = <0x6a>;
+		monitored-battery = <&bat>;
+		fuel-gauge = <&sc2730_fgu>;
+		ti,current-limit = <1800>;
+		ti,weak-battery-voltage = <3400>;
+		ti,battery-regulation-voltage = <4340>;
+		/*
+		 * ~0.65C, deliberately below the 1984mA (1.04C) this pack and
+		 * charger are both capable of. Raise this back to 2000 only
+		 * once proper JEITA thermal limiting exists.
+		 */
+		ti,charge-current = <1240>;
+		ti,termination-current = <200>;
+		ti,resistor-sense = <33>;
+
+		usb_otg_vbus: usb-otg-vbus {
+			regulator-name = "usb-otg-vbus";
+		};
+	};
+};
+
+&sdio0 {
+	status = "okay";
+	vmmc-supply = <&vddsdcore>;
+	vqmmc-supply = <&vddsdio>;
+	cd-gpios = <&eic_sync 19 GPIO_ACTIVE_LOW>;
+	bus-width = <4>;
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x73 0x72 0x72>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x6e 0x7f 0x01 0x01>;
+	sprd,phy-delay-sd-highspeed = <0x7f 0x1a 0x9a 0x9a>;
+	sprd,phy-delay-legacy = <0x7f 0x1a 0x9a 0x9a>;
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	no-sdio;
+	no-mmc;
+};
+
+&sdio3 {
+	status = "okay";
+	vmmc-supply = <&vddemmccore>;
+	bus-width = <8>;
+	voltage-ranges = <3000 3000>;
+	non-removable;
+	cap-mmc-hw-reset;
+	sprd,phy-delay-mmc-hs400es = <0x40 0x7f 0x2d 0x2d>;
+	sprd,phy-delay-mmc-hs400 = <0x3f 0xdf 0x2f 0x2f>;
+	sprd,phy-delay-mmc-hs200 = <0x7f 0xde 0xd4 0xd4>;
+	sprd,phy-delay-mmc-ddr52 = <0x3e 0x37 0x24 0x24>;
+	sprd,phy-delay-mmc-highspeed = <0x60 0xb7 0x34 0x34>;
+	mmc-hs400-enhanced-strobe;
+	mmc-hs400-1_8v;
+	mmc-hs200-1_8v;
+	mmc-ddr-1_8v;
+	no-sdio;
+	no-sd;
+};
+
+&sdio1 {
+	status = "okay";
+	bus-width = <4>;
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x76 0x69 0x69>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x7f 0xf7 0xf5 0xf5>;
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	no-sd;
+	no-mmc;
+};
+
+/ {
+	sprd_marlin3: sprd-marlin3 {
+		compatible = "unisoc,marlin3lite_sdio";
+
+		enable-gpios = <&ap_gpio 143 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&ap_gpio 95 GPIO_ACTIVE_LOW>;
+		m2-wakeup-ap-gpios = <&ap_gpio 33 GPIO_ACTIVE_LOW>;
+		m2-to-ap-irq-gpios = <&ap_gpio 94 GPIO_ACTIVE_LOW>;
+		adma-tx;
+		adma-rx;
+
+		clock-names = "clk_32k", "source", "enable";
+		clocks = <&aon_clk CLK_AUX0>, <&ext_32k>,
+			 <&aonapb_gate CLK_AUX0_EB>;
+
+		extcon = <&sdio1>;
+		sdhci-name = <&sdio1>;
+
+		sprd,btwf-file-name = "/lib/firmware/wcnmodem.bin";
+		sprd,gnss-file-name = "/lib/firmware/gnssmodem.bin";
+
+		avdd12-supply = <&vddwcn>;
+		avdd33-supply = <&vddwifipa>;
+		dcxo18-supply = <&vddsim2>;
+
+		avdd12-parent-bound-chip = <REG_ANA_SLP_DCDC_PD_CTRL MASK_ANA_SLP_DCDCGEN1_PD_EN 0x0 MASK_ANA_SLP_DCDCGEN1_PD_EN>;
+		avdd12-bound-wbreq = <REG_ANA_LDO_XTL_EN10 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN>;
+		avdd33-bound-wbreq = <REG_ANA_LDO_XTL_EN11 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN>;
+
+		wlan {
+			compatible = "sprd,sc2355-sdio-wifi";
+			nvmem-cells = <&uid_start>, <&uid_end>;
+			nvmem-cell-names = "uid-start", "uid-end";
+		};
+
+		sprd-mtty {
+			compatible = "sprd,mtty";
+			nvmem-cells = <&uid_start>, <&uid_end>;
+			nvmem-cell-names = "uid-start", "uid-end";
+		};
+	};
+};

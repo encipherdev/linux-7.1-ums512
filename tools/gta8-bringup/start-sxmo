@@ -1,0 +1,71 @@
+#!/bin/bash
+# start-sxmo: Launch Sxmo Mobile Desktop Environment
+
+echo "=== Starting Sxmo Mobile Shell ==="
+
+# Stop text console on DRM display
+killall kmscon 2>/dev/null || true
+pkill -9 -f kmscon 2>/dev/null || true
+sleep 0.5
+
+# Ensure /dev/shm is mounted for Wayland shared memory buffers
+mkdir -p /dev/shm
+mountpoint -q /dev/shm || mount -t tmpfs -o rw,nosuid,nodev,mode=1777 tmpfs /dev/shm
+
+# Ensure /dev/pts is mounted
+mkdir -p /dev/pts
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts 2>/dev/null || true
+
+# Ensure input device permissions
+chmod -R 777 /dev/input 2>/dev/null || true
+chmod -R 777 /dev/dri 2>/dev/null || true
+
+# Ensure runtime directory exists
+mkdir -p /run/user/1000
+chown -R sxmo:sxmo /run/user/1000
+chmod 700 /run/user/1000
+rm -rf /run/user/1000/*
+
+# Start seatd without VT binding
+killall -9 seatd 2>/dev/null || true
+pkill -9 -f seatd 2>/dev/null || true
+rm -f /run/seatd.sock
+SEATD_VTBOUND=0 /usr/sbin/seatd -u sxmo -g video &
+sleep 0.5
+chmod 666 /run/seatd.sock
+
+# Ensure hook permissions
+chmod -R 755 /home/sxmo/.config/sxmo/hooks/ 2>/dev/null || true
+
+# Export Wayland & Renderer environment
+export XDG_RUNTIME_DIR=/run/user/1000
+export LIBSEAT_BACKEND=seatd
+export WLR_RENDERER=pixman
+export WLR_BACKENDS=drm,libinput
+export WLR_DRM_NO_ATOMIC=1
+export WLR_DRM_NO_MODIFIERS=1
+export WLR_NO_HARDWARE_CURSORS=1
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+export WLR_LIBINPUT_NO_DEVICES=1
+export LD_PRELOAD=/usr/local/lib/libdrm_fix.so
+export SXMO_WM=sway
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+
+echo "Launching Sway as user sxmo with DRM fix..."
+su - sxmo -c "
+export XDG_RUNTIME_DIR=/run/user/1000
+export LIBSEAT_BACKEND=seatd
+export WLR_RENDERER=pixman
+export WLR_BACKENDS=drm,libinput
+export WLR_DRM_NO_ATOMIC=1
+export WLR_DRM_NO_MODIFIERS=1
+export WLR_NO_HARDWARE_CURSORS=1
+export WLR_RENDERER_ALLOW_SOFTWARE=1
+export WLR_LIBINPUT_NO_DEVICES=1
+export LD_PRELOAD=/usr/local/lib/libdrm_fix.so
+export SXMO_WM=sway
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=sway
+exec sway -c /home/sxmo/.config/sxmo/sway
+"

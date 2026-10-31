@@ -1,0 +1,33 @@
+#!/bin/bash
+# tablet-keyboard: Toggle or show/hide virtual touch keyboard
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=$(ls /run/user/1000/wayland-* 2>/dev/null | grep -v '\.lock' | head -n 1 | xargs -r basename)
+
+ACTION="${1:-toggle}"
+
+is_running() {
+    pgrep -u sxmo -f wvkbd-mobintl >/dev/null 2>&1
+}
+
+case "$ACTION" in
+    open|show)
+        if ! is_running; then
+            echo "Opening virtual touch keyboard..."
+            su - sxmo -c "export XDG_RUNTIME_DIR=/run/user/1000; export WAYLAND_DISPLAY='$WAYLAND_DISPLAY'; nohup wvkbd-mobintl -L 300 -H 320 >/dev/null 2>&1 &"
+        fi
+        ;;
+    close|hide)
+        echo "Closing virtual touch keyboard..."
+        pkill -u sxmo -f wvkbd-mobintl 2>/dev/null || true
+        ;;
+    toggle)
+        if is_running; then
+            echo "Closing virtual touch keyboard..."
+            pkill -u sxmo -f wvkbd-mobintl 2>/dev/null || true
+        else
+            echo "Opening virtual touch keyboard..."
+            su - sxmo -c "export XDG_RUNTIME_DIR=/run/user/1000; export WAYLAND_DISPLAY='$WAYLAND_DISPLAY'; nohup wvkbd-mobintl -L 300 -H 320 >/dev/null 2>&1 &"
+        fi
+        ;;
+esac

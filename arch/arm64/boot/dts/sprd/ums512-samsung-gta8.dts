@@ -1,0 +1,281 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Samsung Galaxy Tab A8 10.5 (SM-X207 / SM-X200 / SM-X205, gta8)
+ * Unisoc UMS512 / T618 SoC board DTS.
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/input/gpio-keys.h>
+#include <dt-bindings/clock/sprd,ums512-clk.h>
+#include <dt-bindings/mfd/sprd,sc2730-regs.h>
+#include <dt-bindings/mfd/sprd,sc2730-mask.h>
+#include "ums512.dtsi"
+#include "sc2730.dtsi"
+#include "sprd-sound-fe-be.dtsi"
+
+/ {
+	model = "Samsung Galaxy Tab A8 10.5 (SM-X207)";
+	compatible = "samsung,gta8", "sprd,ums512";
+	sprd,sc-id = "ums512 25c10 1000";
+
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x00 0x80000000 0x00 0xbffff000>; /* Exact DRAM map from live stock tree */
+	};
+
+	chosen {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		stdout-path = "serial1:115200n8";
+	};
+
+	/*
+	 * Bootloader splash framebuffer at 0x9e000000.
+	 * Hardware DPU layer pitch is 1200 pixels (LAY_PITCH=0x4b0 = 1200).
+	 * Visible panel is 1200 x 1920 @ 32 bpp -> stride = 1200 * 4 = 4800 bytes.
+	 * Format is XRGB8888 (x8r8g8b8) for native 1:1 memcpy in simpledrm.
+	 */
+	framebuffer0: framebuffer@9e000000 {
+		compatible = "simple-framebuffer";
+		reg = <0x0 0x9e000000 0x0 0x9e4000>;
+		width = <1200>;
+		height = <1920>;
+		stride = <(1200 * 4)>;
+		format = "x8r8g8b8";
+		status = "okay";
+		memory-region = <&framebuffer_region>;
+	};
+
+	firmware {
+		android {
+			compatible = "android,firmware";
+			boot_devices = "soc/70000000.apb/71400000.mmc", "soc/soc:apb@70000000/71400000.mmc", "71400000.mmc";
+
+			fstab {
+				compatible = "android,fstab";
+
+				system {
+					compatible = "android,system";
+					dev = "system";
+					type = "ext4";
+					mnt_flags = "ro";
+					fsmgr_flags = "wait,logical,first_stage_mount";
+				};
+
+				system_ext {
+					compatible = "android,system_ext";
+					dev = "system_ext";
+					type = "ext4";
+					mnt_flags = "ro";
+					fsmgr_flags = "wait,logical,first_stage_mount";
+				};
+
+				vendor {
+					compatible = "android,vendor";
+					dev = "vendor";
+					type = "ext4";
+					mnt_flags = "ro";
+					fsmgr_flags = "wait,logical,first_stage_mount";
+				};
+
+				product {
+					compatible = "android,product";
+					dev = "product";
+					type = "ext4";
+					mnt_flags = "ro";
+					fsmgr_flags = "wait,logical,first_stage_mount";
+				};
+			};
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		ddrbist-mem@80000000 {
+			reg = <0 0x80000000 0 0x1000>;
+			no-map;
+		};
+
+		sysdumpinfo-mem@80001000 {
+			reg = <0 0x80001000 0 0x1000>;
+			no-map;
+		};
+
+		rebootescrow@81ff0000 {
+			reg = <0 0x81ff0000 0 0x10000>;
+			no-map;
+		};
+
+		sec_debug_region: sec_debug_region@8f000000 {
+			reg = <0 0x8f000000 0 0x900000>;
+			no-map;
+		};
+
+		ss_plog@8f900000 {
+			reg = <0 0x8f900000 0 0x200000>;
+			no-map;
+		};
+
+		uboot_log-mem@92400000 {
+			reg = <0 0x92400000 0 0x80000>;
+			no-map;
+		};
+
+		framebuffer_region: framebuffer-region@9e000000 {
+			compatible = "framebuffer";
+			reg = <0 0x9e000000 0 0x9e4000>;
+			no-map;
+		};
+
+		/* Persistent kernel console oops log in RAM */
+		ramoops@fff80000 {
+			compatible = "ramoops";
+			reg = <0 0xfff80000 0 0x40000>;
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			pmsg-size = <0x8000>;
+		};
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+
+		key-power {
+			label = "Power Key";
+			gpios = <&pmic_eic 1 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_POWER>;
+			wakeup-source;
+			debounce-interval = <2>;
+		};
+
+		key-volumeup {
+			label = "Volume Up Key";
+			gpios = <&ap_gpio 125 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_VOLUMEUP>;
+			wakeup-source;
+			debounce-interval = <2>;
+		};
+
+		key-volumedown {
+			label = "Volume Down Key";
+			gpios = <&pmic_eic 4 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_VOLUMEDOWN>;
+			wakeup-source;
+			debounce-interval = <2>;
+		};
+	};
+
+	usb_otg_vbus: regulator-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb-otg-vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+};
+
+/* UART1 console */
+&uart1 {
+	status = "okay";
+};
+
+/* eMMC storage (HS400 8-bit) */
+&sdio3 {
+	status = "okay";
+	vmmc-supply = <&vddemmccore>;
+	bus-width = <8>;
+	voltage-ranges = <3000 3000>;
+	non-removable;
+	cap-mmc-hw-reset;
+	sprd,phy-delay-mmc-hs400es = <0x40 0x7f 0x2d 0x2d>;
+	sprd,phy-delay-mmc-hs400 = <0x3f 0xdf 0x2f 0x2f>;
+	sprd,phy-delay-mmc-hs200 = <0x7f 0xde 0xd4 0xd4>;
+	sprd,phy-delay-mmc-ddr52 = <0x3e 0x37 0x24 0x24>;
+	sprd,phy-delay-mmc-highspeed = <0x60 0xb7 0x34 0x34>;
+	mmc-hs400-enhanced-strobe;
+	mmc-hs400-1_8v;
+	mmc-hs200-1_8v;
+	mmc-ddr-1_8v;
+	no-sdio;
+	no-sd;
+};
+
+/* MicroSD slot */
+&sdio0 {
+	status = "okay";
+	vmmc-supply = <&vddsdcore>;
+	vqmmc-supply = <&vddsdio>;
+	cd-gpios = <&eic_sync 19 GPIO_ACTIVE_LOW>;
+	bus-width = <4>;
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x73 0x72 0x72>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x6e 0x7f 0x01 0x01>;
+	sprd,phy-delay-sd-highspeed = <0x7f 0x1a 0x9a 0x9a>;
+	sprd,phy-delay-legacy = <0x7f 0x1a 0x9a 0x9a>;
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	no-sdio;
+	no-mmc;
+};
+
+/* CPU DVFS and power */
+&pinctrl {
+	dvfs_i2c_pin_func: dvfs-i2c-pin-func {
+		pins = "UMS512_SDA3", "UMS512_SCL3";
+		function = "func1";
+	};
+};
+
+&aon_i2c0 {
+	status = "okay";
+	clock-frequency = <1000000>;
+};
+
+&cpudvfs_dev {
+	pinctrl-names = "default";
+	pinctrl-0 = <&dvfs_i2c_pin_func>;
+	status = "okay";
+};
+
+/* Display DPU and IOMMU: disabled so bootloader scanout remains intact for simpledrm */
+&iommu_disp {
+	status = "disabled";
+};
+
+&disp {
+	status = "disabled";
+};
+
+&dpu {
+	status = "disabled";
+};
+
+/* USB OTG & Type-C controller */
+&hsphy {
+	status = "okay";
+	phy-supply = <&vddusb33>;
+};
+
+&usb {
+	status = "okay";
+	dr_mode = "peripheral";
+};
+
+/* Disable PMIC Type-C PD controller during bringup so it does not conflict with peripheral gadget mode */
+&pmic_typec_pd {
+	status = "disabled";
+};
+
+&gpu {
+	mali-supply = <&vddgpu>;
+	status = "okay";
+};

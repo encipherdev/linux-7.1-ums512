@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+menu "Spreadtrum and Unisoc SoC drivers"
+
+config SPRD_AGDSP
+	tristate "Audio DSP support"
+	depends on ARCH_SPRD || COMPILE_TEST
+	depends on MAILBOX
+	help
+	  Say y here to enable support for communication with the audio
+	  DSP found in Spreadtrum/Unisoc SoCs.
+
+config SPRD_AUDCP_BOOT
+	tristate "Audio DSP (AUDCP) boot support"
+	depends on ARCH_SPRD || COMPILE_TEST
+	help
+	  Say y here to load firmware into and boot the audio co-processor
+	  (AUDCP / AGDSP) on Spreadtrum/Unisoc SoCs, so the sprd-agdsp IPC
+	  and ASoC audio stack can communicate with it.
+
+endmenu

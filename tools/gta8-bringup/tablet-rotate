@@ -1,0 +1,39 @@
+#!/bin/bash
+# tablet-rotate: Rotate tablet screen between portrait and landscape
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export SWAYSOCK=$(ls /run/user/1000/sway-ipc.*.sock 2>/dev/null | head -n 1)
+
+if [ -z "$SWAYSOCK" ] || [ ! -e "$SWAYSOCK" ]; then
+    echo "Sway is not running."
+    exit 1
+fi
+
+ACTION="$1"
+
+CURRENT=$(su - sxmo -c "export XDG_RUNTIME_DIR=/run/user/1000; export SWAYSOCK='$SWAYSOCK'; swaymsg -t get_outputs" 2>/dev/null | grep -o '"transform": "[^"]*"' | head -n 1 | cut -d'"' -f4)
+
+case "$ACTION" in
+    horizontal|landscape|90)
+        TARGET="90"
+        ;;
+    vertical|portrait|0|normal)
+        TARGET="normal"
+        ;;
+    270)
+        TARGET="270"
+        ;;
+    180)
+        TARGET="180"
+        ;;
+    toggle|*)
+        if [ "$CURRENT" = "normal" ] || [ "$CURRENT" = "0" ]; then
+            TARGET="90"
+        else
+            TARGET="normal"
+        fi
+        ;;
+esac
+
+echo "Rotating display to: $TARGET"
+su - sxmo -c "export XDG_RUNTIME_DIR=/run/user/1000; export SWAYSOCK='$SWAYSOCK'; swaymsg output DSI-1 transform $TARGET"
