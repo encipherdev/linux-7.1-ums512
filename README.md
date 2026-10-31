@@ -2,16 +2,15 @@
 
 Linux 7.1.0-rc1 mainline kernel bring-up for Samsung Galaxy Tab A8 10.5 (2021) with Unisoc Tiger T618 (`ums512_25c10` / `sharkl5pro`).
 
-## Current Status
-- Boots to userspace using SimpleFB and earlycon
-- Framebuffer handoff and DRM display pipeline active
-- 8x CPUs (2x Cortex-A75 + 6x Cortex-A55) brought up
-- Tested with Debian rootfs and sxmo/wayland user environments
+> **Status: Experimental Bring-Up**
+> - Boots to userspace via earlycon and SimpleFB.
+> - **Known Issue:** SimpleFB display output is currently buggy / glitched (color/stride artifacts). Native panel DRM driver is under bring-up.
+> - All 8 CPUs (2x Cortex-A75 + 6x Cortex-A55) online.
 
 ## Key Files
 - **Device Tree:** `arch/arm64/boot/dts/sprd/ums512-samsung-gta8.dts`
 - **Defconfig:** `arch/arm64/configs/gta8_defconfig`
-- **Bring-up Scripts & Fixes:** `tools/gta8-bringup/`
+- **Bring-up Scripts:** `tools/gta8-bringup/`
 
 ## Compilation
 ```bash
