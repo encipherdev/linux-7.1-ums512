@@ -2275,7 +2275,7 @@
 			 * interval (6.16 used 12s) for margin against a stalled feed
 			 * loop; SPRD_WDT_MAX_TIMEOUT is 60s.
 			 */
-			watchdog@2f0000 {
+			ap_wdt: watchdog@2f0000 {
 				compatible = "sprd,ums512-wdt", "sprd,sp9860-wdt";
 				reg = <0x2f0000 0x10000>;
 				interrupts = <GIC_SPI 79 IRQ_TYPE_LEVEL_HIGH>;

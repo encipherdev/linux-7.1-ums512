@@ -13,3 +13,17 @@ config DRM_SPRD
 	  Choose this option if you have a Unisoc chipset.
 	  If M is selected the module will be called sprd_drm.
 
+
+config DRM_UMS512_DPU
+	tristate "Unisoc UMS512 DPU KMS (bootloader-initialised DSI)"
+	depends on ARCH_SPRD || COMPILE_TEST
+	depends on DRM && OF && MMU
+	select APERTURE_HELPERS
+	select DRM_CLIENT_SELECTION
+	select DRM_GEM_DMA_HELPER
+	select DRM_KMS_HELPER
+	help
+	  KMS driver for the UMS512 (T618) display processor that adopts the
+	  MIPI-DSI link and panel brought up by the bootloader, and drives the
+	  DPU layers with atomic planes, vblank and page flips. Do not enable
+	  together with DRM_SPRD on the same device.

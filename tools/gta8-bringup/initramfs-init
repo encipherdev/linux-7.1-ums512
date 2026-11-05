@@ -1,0 +1,40 @@
+#!/bin/busybox sh
+# Minimal bring-up init for the Galaxy Tab A8 mainline kernel.
+# NOTE: the bundled busybox is a static *bionic* binary; the initramfs must
+# ship /dev/urandom etc. (build.sh does this) or it aborts with
+# "getentropy failed" before this script runs.
+B=/bin/busybox
+$B mount -t proc proc /proc
+$B mount -t sysfs sys /sys
+$B mount -t devtmpfs dev /dev
+$B mkdir -p /dev/pts /tmp
+$B mount -t devpts devpts /dev/pts
+$B --install -s /bin
+export PATH=/bin:/sbin HOME=/ TERM=vt100
+
+k() { echo "<6>initdbg: $*" > /dev/kmsg; }
+k "init started $($B uname -r)"
+
+echo "=== gta8 mainline initramfs: $($B uname -r) ===" > /dev/tty0
+$B dmesg | $B grep -iE "ums512-dpu|panfrost|initdbg" > /dev/tty0
+
+# Root shell on the USB ACM gadget (host side: /dev/ttyACM0, e.g.
+# `picocom -b 115200 /dev/ttyACM0`). The UDC binds a few seconds into boot.
+(
+	n=0
+	while [ ! -c /dev/ttyGS0 ] && [ $n -lt 60 ]; do $B sleep 1; n=$((n + 1)); done
+	k "ttyGS0 after ${n}s: $($B ls -la /dev/ttyGS0 2>&1)"
+	while true; do
+		$B stty -F /dev/ttyGS0 sane 115200 2>/dev/null
+		printf '\r\n=== gta8 USB shell ===\r\n' > /dev/ttyGS0
+		$B sh -i </dev/ttyGS0 >/dev/ttyGS0 2>&1
+		k "usb shell exited rc=$?"
+		$B sleep 1
+	done
+) &
+
+# Shell on the panel console.
+while true; do
+	$B sh -i </dev/tty0 >/dev/tty0 2>&1
+	$B sleep 1
+done
