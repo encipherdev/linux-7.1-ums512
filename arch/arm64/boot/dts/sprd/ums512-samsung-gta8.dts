@@ -303,10 +303,7 @@
 
 &usb {
 	status = "okay";
-	dr_mode = "otg";
-	usb-role-switch;
-	role-switch-default-mode = "peripheral";
-	vbus-supply = <&usb_otg_vbus>;
+	dr_mode = "peripheral";
 };
 
 /* Disable PMIC Type-C PD controller during bringup so it does not conflict with peripheral gadget mode */
