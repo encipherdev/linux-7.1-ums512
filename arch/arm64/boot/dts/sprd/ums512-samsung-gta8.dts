@@ -19,7 +19,8 @@
 / {
 	model = "Samsung Galaxy Tab A8 10.5 (SM-X207)";
 	compatible = "samsung,gta8", "sprd,ums512";
-	sprd,sc-id = "ums512 25c10 1000";
+	/* Must NOT equal a stock DTBO id, or lk applies the Android overlay onto this DT. */
+	sprd,sc-id = "ums512 1000 1000";
 
 	aliases {
 		serial0 = &uart0;
@@ -50,8 +51,34 @@
 		height = <1920>;
 		stride = <(1200 * 4)>;
 		format = "x8r8g8b8";
-		status = "okay";
+		/* ums512-dpu-kms owns the scanout; it still reads this node's reg. */
+		status = "disabled";
 		memory-region = <&framebuffer_region>;
+		/* keep the bootloader scanout clocked past clk_disable_unused */
+		clocks = <&apahb_gate CLK_DISPC_EB>,
+			 <&ap_clk CLK_DISPC0>,
+			 <&ap_clk CLK_DISPC0_DPI>,
+			 <&apahb_gate CLK_DSI_EB>;
+	};
+
+	/*
+	 * Native KMS on the DPU. The bootloader initialises DSI + panel in video
+	 * mode; this driver adopts that link (mode read back from the DPU),
+	 * owns the layer engine and replaces framebuffer0 once probed.
+	 */
+	display@20300000 {
+		compatible = "sprd,ums512-dpu-kms";
+		reg = <0x0 0x20300000 0x0 0x800>,
+		      <0x0 0x20300800 0x0 0x80>;
+		interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&apahb_gate CLK_DISPC_EB>,
+			 <&ap_clk CLK_DISPC0>,
+			 <&ap_clk CLK_DISPC0_DPI>,
+			 <&apahb_gate CLK_DSI_EB>;
+		clock-names = "core", "clk", "dpi", "dsi";
+		width-mm = <143>;
+		height-mm = <228>;
+		sprd,boot-framebuffer = <&framebuffer0>;
 	};
 
 	firmware {
@@ -278,4 +305,9 @@
 &gpu {
 	mali-supply = <&vddgpu>;
 	status = "okay";
+};
+
+/* Bring-up: AP watchdog off (PMIC wdt driver stays to feed a bootloader-armed one) */
+&ap_wdt {
+	status = "disabled";
 };

@@ -7,3 +7,4 @@ sprd-drm-y := sprd_drm.o \
 	megacores_pll.o
 
 obj-$(CONFIG_DRM_SPRD) += sprd-drm.o
+obj-$(CONFIG_DRM_UMS512_DPU) += ums512_dpu_kms.o

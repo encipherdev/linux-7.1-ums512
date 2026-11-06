@@ -4,13 +4,14 @@
 # Trimmed from the 5.4 vendor BSP to the external-SDIO path only:
 # integrated-chip boot (wcn_integrate*), SIPC and PCIe transports removed.
 #
-subdir-ccflags-y := \
-	-I $(srctree)/$(src)/include \
-	-I $(srctree)/$(src)/boot \
-	-I $(srctree)/$(src)/platform \
-	-I $(srctree)/$(src)/platform/rf \
-	-I $(srctree)/$(src)/platform/gnss \
-	-I $(srctree)/$(src)/sleep
+ccflags-y := \
+	-I$(src)/include \
+	-I$(src)/boot \
+	-I$(src)/platform \
+	-I$(src)/platform/rf \
+	-I$(src)/platform/gnss \
+	-I$(src)/sleep
+subdir-ccflags-y := $(ccflags-y)
 
 obj-$(CONFIG_UNISOC_WCN_BSP) += wcn_bsp.o
 
