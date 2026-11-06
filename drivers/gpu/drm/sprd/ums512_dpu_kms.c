@@ -476,7 +476,6 @@ static int dpu_read_mode(struct ums512_dpu *dpu, struct clk *dpi_clk)
 	u32 ht = readl(dpu->base + REG_DPI_H_TIMING);
 	u32 vt = readl(dpu->base + REG_DPI_V_TIMING);
 	u32 hact = size & 0xffff, vact = size >> 16;
-	unsigned long rate = dpi_clk ? clk_get_rate(dpi_clk) : 0;
 
 	if (!hact || !vact) {
 		drm_err(drm, "DPU not initialised by the bootloader (PANEL_SIZE=0)\n");
@@ -500,10 +499,8 @@ static int dpu_read_mode(struct ums512_dpu *dpu, struct clk *dpi_clk)
 		/* Timings unreadable: fall back to a nominal 60 Hz. */
 		m->hsync_start = m->hsync_end = m->htotal = hact;
 		m->vsync_start = m->vsync_end = m->vtotal = vact;
-		rate = 0;
 	}
-	m->clock = rate ? rate / 1000 :
-		   DIV_ROUND_UP(m->htotal * m->vtotal * 60, 1000);
+	m->clock = DIV_ROUND_UP((unsigned long)m->htotal * m->vtotal * 60, 1000);
 	m->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
 	m->width_mm = dpu->width_mm;
 	m->height_mm = dpu->height_mm;

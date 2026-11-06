@@ -13,6 +13,7 @@
 # Host tools: aarch64-linux-gnu-gcc/binutils, bc, cpio, gzip, python3,
 #             mkbootimg, mkdtboimg, avbtool (android-tools), adb for flashing.
 set -euo pipefail
+export ANDROID_SERIAL=${ANDROID_SERIAL:-R9PW4053V6W}
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SRC="$(cd "$HERE/../.." && pwd)"
@@ -20,7 +21,13 @@ CROSS_COMPILE=${CROSS_COMPILE:-aarch64-linux-gnu-}
 O=${O:-out}
 OUT_IMG=${OUT_IMG:-$SRC/boot-gta8.img}
 INITRAMFS_DIR=${INITRAMFS_DIR:-$SRC/../initramfs}
-BUSYBOX=${BUSYBOX:-$SRC/../enciphered-kernel-4.14/KernelSU/userspace/ksud/bin/aarch64/busybox}
+
+if [ -z "${BUSYBOX:-}" ]; then
+	for b in "$SRC/../busybox-src/busybox" "$INITRAMFS_DIR/bin/busybox" "$SRC/../enciphered-kernel-4.14/KernelSU/userspace/ksud/bin/aarch64/busybox"; do
+		if [ -f "$b" ]; then BUSYBOX="$b"; break; fi
+	done
+fi
+BUSYBOX=${BUSYBOX:-$SRC/../busybox-src/busybox}
 DTB_NAME=sprd/ums512-samsung-gta8.dtb
 JOBS=$(nproc)
 
@@ -60,13 +67,18 @@ echo ">> building Image + $DTB_NAME"
 mk -j"$JOBS" Image "$DTB_NAME"
 
 # --- initramfs ------------------------------------------------------------------
-if [ ! -f "$INITRAMFS_DIR/init" ]; then
-	echo ">> creating initramfs skeleton in $INITRAMFS_DIR"
+mkdir -p "$INITRAMFS_DIR"/{bin,sbin,dev,proc,sys,tmp,etc,lib,usr/bin,usr/sbin,usr/local/bin,usr/local/lib,mnt,newroot,root}
+if [ ! -f "$INITRAMFS_DIR/bin/busybox" ] || [ "${FORCE_BUSYBOX:-0}" = "1" ]; then
 	[ -f "$BUSYBOX" ] || { echo "static aarch64 busybox not found; set BUSYBOX=" >&2; exit 1; }
-	mkdir -p "$INITRAMFS_DIR"/{bin,sbin,dev,proc,sys,tmp,etc}
+	echo ">> installing busybox into $INITRAMFS_DIR"
 	install -m755 "$BUSYBOX" "$INITRAMFS_DIR/bin/busybox"
-	install -m755 "$HERE/initramfs-init" "$INITRAMFS_DIR/init"
 fi
+echo ">> syncing initramfs init and bring-up tools"
+install -m755 "$HERE/initramfs-init" "$INITRAMFS_DIR/init"
+[ -f "$HERE/libdrm_fix.so" ] && cp "$HERE/libdrm_fix.so" "$INITRAMFS_DIR/usr/local/lib/" && cp "$HERE/libdrm_fix.so" "$INITRAMFS_DIR/lib/"
+[ -f "$HERE/start-sxmo" ] && install -m755 "$HERE/start-sxmo" "$INITRAMFS_DIR/usr/local/bin/"
+[ -f "$HERE/tablet-rotate" ] && install -m755 "$HERE/tablet-rotate" "$INITRAMFS_DIR/usr/local/bin/"
+[ -f "$HERE/tablet-keyboard" ] && install -m755 "$HERE/tablet-keyboard" "$INITRAMFS_DIR/usr/local/bin/"
 echo ">> packing initramfs"
 RD="$SRC/$O/initramfs.cpio.gz"
 # gen_init_cpio so the archive can carry device nodes without root: the bionic

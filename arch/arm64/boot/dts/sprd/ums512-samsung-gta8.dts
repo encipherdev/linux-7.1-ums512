@@ -209,6 +209,15 @@
 		regulator-min-microvolt = <5000000>;
 		regulator-max-microvolt = <5000000>;
 	};
+
+	bat: battery {
+		compatible = "simple-battery";
+		charge-full-design-microamp-hours = <7040000>;
+		charge-term-current-microamp = <150000>;
+		constant-charge-voltage-max-microvolt = <4350000>;
+		voltage-min-design-microvolt = <3400000>;
+		operating-range-celsius = <0 60>;
+	};
 };
 
 /* UART1 console */
@@ -294,7 +303,10 @@
 
 &usb {
 	status = "okay";
-	dr_mode = "peripheral";
+	dr_mode = "otg";
+	usb-role-switch;
+	role-switch-default-mode = "peripheral";
+	vbus-supply = <&usb_otg_vbus>;
 };
 
 /* Disable PMIC Type-C PD controller during bringup so it does not conflict with peripheral gadget mode */
@@ -310,4 +322,30 @@
 /* Bring-up: AP watchdog off (PMIC wdt driver stays to feed a bootloader-armed one) */
 &ap_wdt {
 	status = "disabled";
+};
+
+/* Novatek Touchscreen on SPI2 (0x70a00000 CS 1) */
+&spi2 {
+	status = "okay";
+
+	touchscreen@1 {
+		compatible = "novatek,NVT-ts-spi-a8";
+		reg = <1>;
+		spi-max-frequency = <9600000>;
+		novatek,swrst-n8-addr = <0x0003f0fe>;
+		novatek,spi-rd-fast-addr = <0x0003f310>;
+		novatek,resolution = <1200 1920>;
+		novatek,area-size = <0x38 0x70 0x3c>;
+		novatek,max_touch_num = <10>;
+		novatek,reset-gpio = <&ap_gpio 145 GPIO_ACTIVE_HIGH>;
+		novatek,irq-gpio = <&eic_async 0 IRQ_TYPE_EDGE_RISING>;
+		novatek,fw_name = "nt36523b_qc_inx_fw.bin";
+		status = "okay";
+	};
+};
+
+&sc2730_fgu {
+	status = "okay";
+	monitored-battery = <&bat>;
+	sprd,calib-resistance-micro-ohms = <10000>;
 };

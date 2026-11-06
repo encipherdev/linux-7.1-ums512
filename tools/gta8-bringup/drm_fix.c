@@ -60,9 +60,12 @@ static bool is_mocked_handle(uint32_t handle) {
     return found;
 }
 
-/* Force drmIsMaster to return true so wlroots allows dumb allocator */
+/* Real drmIsMaster */
 int drmIsMaster(int fd) {
-    return 1;
+    static int (*real_fn)(int) = NULL;
+    if (!real_fn) real_fn = dlsym(RTLD_NEXT, "drmIsMaster");
+    if (real_fn) return real_fn(fd);
+    return 0;
 }
 
 /* Mock drmModeCreateLease to return a dup() with FD_CLOEXEC.

@@ -18,7 +18,7 @@
 # usage: mkbootimg-gta8.sh <Image> <dtb> <initramfs.cpio.gz> <out.img> [cmdline]
 set -euo pipefail
 IMG=$1 DTB=$2 RD=$3 OUT=$4
-CMDLINE=${5:-"console=tty0 console=ttyS1,115200n8 loglevel=7 rdinit=/init panic=0"}
+CMDLINE=${5:-"console=tty0 console=ttyS1,115200n8 loglevel=7 rdinit=/init panic=0 cma=256M"}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 

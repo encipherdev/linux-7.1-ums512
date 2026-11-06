@@ -17,7 +17,7 @@ while true; do
     fi
 
     # Check Heimdall / Download mode
-    if echo '418418' | sudo -S heimdall detect 2>/dev/null | grep -q "Device detected"; then
+    if sudo -n heimdall detect 2>/dev/null | grep -q "Device detected" || heimdall detect 2>/dev/null | grep -q "Device detected"; then
         echo "WATCHER: Heimdall Download Mode detected!"
         exit 0
     fi

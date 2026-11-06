@@ -407,7 +407,7 @@ static int sprd_spi_txrx_bufs(struct spi_device *sdev, struct spi_transfer *t)
 	while (trans_len) {
 		len = trans_len > SPRD_SPI_FIFO_SIZE ? SPRD_SPI_FIFO_SIZE :
 			trans_len;
-		if (ss->trans_mode & SPRD_SPI_TX_MODE) {
+		if (ss->trans_mode == SPRD_SPI_TX_MODE) {
 			sprd_spi_set_tx_length(ss, len);
 			write_size += ss->write_bufs(ss, len);
 
@@ -419,7 +419,9 @@ static int sprd_spi_txrx_bufs(struct spi_device *sdev, struct spi_transfer *t)
 				sprd_spi_tx_req(ss);
 
 			ret = sprd_spi_wait_for_tx_end(ss, t);
-		} else {
+			if (ret)
+				goto complete;
+		} else if (ss->trans_mode == SPRD_SPI_RX_MODE) {
 			sprd_spi_set_rx_length(ss, len);
 
 			/*
@@ -432,13 +434,22 @@ static int sprd_spi_txrx_bufs(struct spi_device *sdev, struct spi_transfer *t)
 				write_size += ss->write_bufs(ss, len);
 
 			ret = sprd_spi_wait_for_rx_end(ss, t);
-		}
+			if (ret)
+				goto complete;
 
-		if (ret)
-			goto complete;
-
-		if (ss->trans_mode & SPRD_SPI_RX_MODE)
 			read_size += ss->read_bufs(ss, len);
+		} else {
+			/* The SPI device is used for both TX and RX mode.*/
+			sprd_spi_set_tx_length(ss, len);
+			sprd_spi_set_rx_length(ss, len);
+			write_size += ss->write_bufs(ss, len);
+
+			ret = sprd_spi_wait_for_rx_end(ss, t);
+			if (ret)
+				goto complete;
+
+			read_size += ss->read_bufs(ss, len);
+		}
 
 		trans_len -= len;
 	}
@@ -587,6 +598,8 @@ static int sprd_spi_dma_txrx_bufs(struct spi_device *sdev,
 	if (ss->trans_mode & SPRD_SPI_TX_MODE) {
 		write_size = sprd_spi_dma_tx_config(ss, t);
 		sprd_spi_set_tx_length(ss, trans_len);
+		if (ss->trans_mode & SPRD_SPI_RX_MODE)
+			sprd_spi_set_rx_length(ss, trans_len);
 
 		/*
 		 * For our 3 wires mode or dual TX line mode, we need
@@ -938,6 +951,7 @@ static int sprd_spi_probe(struct platform_device *pdev)
 	ss->dev = &pdev->dev;
 	sctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_3WIRE | SPI_TX_DUAL;
 	sctlr->bus_num = pdev->id;
+	sctlr->num_chipselect = 4;
 	sctlr->set_cs = sprd_spi_chipselect;
 	sctlr->transfer_one = sprd_spi_transfer_one;
 	sctlr->can_dma = sprd_spi_can_dma;
